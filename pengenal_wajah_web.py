@@ -19,6 +19,7 @@ try:
     import serial.tools.list_ports
     from datetime import datetime
     from datetime import date
+    
 except ImportError:
     print("Library tidak ditemukan, menginstal sekarang...")
     os.system(
@@ -69,9 +70,9 @@ default_config = {
 
 ########################################################################
 # jangan diubah, jgn dihapus
-url = "https://localhost.scode.web.id/2025-rivaldo-security-pintu-facerecognition/api/api.php"
-url_absen = "https://localhost.scode.web.id/2025-rivaldo-security-pintu-facerecognition/api/api.php?id_wajah="
-
+url = "https://localhost.scode.web.id/2025-andika-restu-monitoring-akses-pintu/api/api.php"
+url_absen = url + "?id_wajah="
+url_absen_rfid = url + "?rfid="
 
 # Cek dan buat file config jika belum ada
 if not os.path.exists(config_path):
@@ -92,7 +93,7 @@ yolo_model = YOLO(config["model_yolo"])
 # Open the camera
 cam = cv2.VideoCapture(config["kamera"])
 timer_verifikasi = config["timer_verifikasi"]  
-durasi_deteksi = config["durasi_deteksi"]
+
 folder_wajah = config["folder_wajah"]
 toleransi = config["toleransi"] 
 timer = config["timer"] 
@@ -150,19 +151,19 @@ def proses_kirim_serial(pesan):
     elif pesan == "get_sensor\n":
         ser.write(pesan.encode())
         print("Mengirim permintaan sensor:", pesan)
-        data = ""
-        while (1):
-            ser.write(pesan.encode())
-            time.sleep(0.1)
-            data = ser.readline().decode('utf-8', errors='ignore').strip()
-            if (len(data) > 0):
-                break
+        # data = ""
+        # while (1):
+        #     ser.write(pesan.encode())
+        #     time.sleep(0.1)
+        #     data = ser.readline().decode('utf-8', errors='ignore').strip()
+        #     if (len(data) > 0):
+        #         break
             
             
             
-        data = data.strip()
-        print("Data Sensor Diterima:", data)
-        return data
+        # data = data.strip().replace(" ","")
+        # print("Data Sensor Diterima:", data)
+        # return data
 
     else:
         ser.write(pesan.encode())
@@ -170,12 +171,21 @@ def proses_kirim_serial(pesan):
 
 
 
-def web(message):
+def web_wajah(message):
     global url_absen
     response = requests.get(url_absen+message)
 
     print(response)
     time.sleep(2)
+
+
+def web_rfid(message):
+    global url_absen
+    response = requests.get(url_absen_rfid+message)
+
+    print(response)
+    time.sleep(2)
+
 
 
 def hapus_semua_dalam_folder(folder_path):
@@ -205,6 +215,7 @@ def image_manager():
         os.mkdir(folder_dummy)
 
     # Ambil data orang dari server
+    print(url)
     respon = requests.get(url=url)
     print(respon.text)
 
@@ -212,8 +223,10 @@ def image_manager():
     for orang in eval(respon.text):
         id = orang["id"]
         nama = orang["nama"]
+        rfid =  orang["rfid"]
+        
 
-        nama_folder_dummy = os.path.join(folder_dummy, id + "_" + nama)
+        nama_folder_dummy = os.path.join(folder_dummy, id + "_" + nama + "_" +  rfid)
         os.makedirs(nama_folder_dummy, exist_ok=True)
 
         for i in range(10):
@@ -365,9 +378,32 @@ def inisiasi():
         status_nama.append(0)
         konfirmasi_nama.append(0)
 
+# Penyimpanan waktu tampil untuk tiap teks
+active_texts = {}
+
+def add_timed_text(text="normal", coord=(10, 10), duration_sec=5):
+    global active_texts
+    now = time.time()
+    active_texts[text] = (now, duration_sec, coord)
+
+def draw_active_texts(frame):
+    global active_texts
+    now = time.time()
+    output_frame = frame.copy()
+
+    for t, (start_time, dur, (x, y)) in list(active_texts.items()):
+        if now - start_time <= dur:
+            cv2.putText(output_frame, t, (x, y), 
+                        cv2.FONT_HERSHEY_SIMPLEX, 0.9, (255, 255, 55), 2)
+        else:
+            del active_texts[t]
+
+    return output_frame
+
+
 
 def deteksi():
-    global timer_start, timer_deteksi, elapsed_time, sekali_kirim, last_detected_name, timer_verifikasi, nama, id, data_nama
+    global timer_start, timer_deteksi, elapsed_time, sekali_kirim, last_detected_name, timer_verifikasi, nama, id, data_nama, last_rfid
 
     # Inisialisasi variabel
     timer_start = None
@@ -375,37 +411,31 @@ def deteksi():
     elapsed_time = 0
     sekali_kirim = False
     last_detected_name = None
+    last_rfid = None
 
     while True:
         # Baca frame dari kamera
         res, frame = cam.read()
         nama_terdeteksi = None
-        data = proses_kirim_serial("get_sensor")
-        print("data : ",data)
+ 
 
-        if data == "1":
-            timer_deteksi = time.time()
-
-        durasi = time.time() - timer_deteksi
-        print( durasi)
-        if durasi < durasi_deteksi :
-            cv2.putText(frame,f"DETEKSI AKTIF ({durasi_deteksi - int(durasi)}) ", (0, 25),
-                            cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
-            print("DETEKSI AKTIF ... ", int(time.time() - timer_deteksi))
-            # Periksa apakah frame berhasil dibaca
-            if not res:
+                        
+           
+        # Periksa apakah frame berhasil dibaca
+        if not res:
                 print("Error: Could not read frame.")
                 break
 
-            # Jalankan YOLO untuk deteksi
-            results = yolo_model(frame)
+############################################# YOLO ######################################################
+        # Jalankan YOLO untuk deteksi
+        results = yolo_model(frame)
 
-            # Loop setiap hasil deteksi
-            if len(results) == 1:
-                nama_terdeteksi = "Tidak Dikenali"
-                nama = nama_terdeteksi
-                id = ""
-                for r in results:
+        # Loop setiap hasil deteksi
+        if len(results) == 1:
+            nama_terdeteksi = "Tidak Dikenali"
+            nama = nama_terdeteksi
+            id = ""
+            for r in results:
                     boxes = r.boxes.xyxy.tolist()
                     for box in boxes:
                         # Ekstraksi koordinat bounding box
@@ -486,11 +516,12 @@ def deteksi():
 
                 if remaining_time <= 0 and not sekali_kirim:
                     print("....................... MENGIRIM ABSEN ........................")
-                    proses_kirim_serial("@"+nama)
+                    proses_kirim_serial("@"+nama) # untuk tampil nama di lcd
+                    proses_kirim_serial("#"+nama) # untuk buka pintu tanpa buzzer
                     sekali_kirim = True
                     cv2.putText(frame, "MENGIRIM ABSEN ...", (0, 100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
-                    web(id)
+                    web_wajah(id)
 
             else:
                 # Reset jika tidak ada nama yang terdeteksi
@@ -504,7 +535,49 @@ def deteksi():
                 cv2.putText(frame, f"Status : ({round(remaining_time, 1)}s)", (0, 50),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
 
+############################################# RFID ######################################################
+
+
+        # dapatkan rfid
+        kode_rfid = ""
+        kode_rfid = ser.readline().decode('utf-8', errors='ignore').strip()
+        
+            
+        
+
+        print("kode_rfid : ",kode_rfid,type(kode_rfid),len(kode_rfid))
+        
+        status = []
+        if kode_rfid != "" :
+            for k in data_nama:
+                data = k.split("_")
+                
+                if data[2] == kode_rfid :
+                    # kirim ke server
+                    
+                    proses_kirim_serial("get_sensor")
+                    time.sleep(0.5)
+                    proses_kirim_serial("@"+data[1])
+                    time.sleep(0.5)
+                    proses_kirim_serial("!"+data[1]) # untuk buka pindu dan buzzer aktif
+                    print("BENAR")
+                    add_timed_text( "ID : " + data[2], (0, 300))
+                    add_timed_text( "NAMA : " + data[1], (0, 330))
+                    add_timed_text("MENGIRIM ABSEN ...", (0, 360))
+                    web_rfid(data[2])
+                    
+                  
+                    break
+
+                status.append(False)
+        
+            if len(status) == len(data_nama) : 
+                proses_kirim_serial("@Tidak Terdaftar")
+                add_timed_text( "ID : " + kode_rfid, (0, 300))
+                add_timed_text("Tidak Terdaftar", (0, 330))
+            
         # Tampilkan frame
+        frame = draw_active_texts(frame)
         cv2.imshow('YOLO Detection', frame)
 
         # Tombol keluar
