@@ -15,8 +15,6 @@ try:
     from ultralytics import YOLO
     import numpy as np
     import json
-    import serial
-    import serial.tools.list_ports
     from datetime import datetime
     from datetime import date
     from flask import Flask, request, Response
@@ -27,7 +25,7 @@ try:
 except ImportError:
     print("Library tidak ditemukan, menginstal sekarang...")
     os.system(
-        "pip install numpy==1.24.3 face_recognition==1.3.0 tqdm==4.67.0 pickle-mixin==1.0.2 opencv-python==4.10.0.84 ultralytics==8.3.32 requests==2.32.3 pyserial==3.5 keyboard==0.13.5")
+        "pip install numpy==1.24.3 face_recognition==1.3.0 tqdm==4.67.0 pickle-mixin==1.0.2 opencv-python==4.10.0.84 ultralytics==8.3.32 requests==2.32.3 keyboard==0.13.5")
 
     from tqdm import tqdm
     import pickle
@@ -36,8 +34,6 @@ except ImportError:
     import numpy as np
     import face_recognition  # Coba impor kembali setelah instalasi
     import json
-    import serial
-    import serial.tools.list_ports
     from datetime import datetime
     from datetime import date
     from flask import Flask, request, Response
@@ -49,13 +45,16 @@ except ImportError:
 timer_start = None
 timer1 = 0
 timer2 = 0
-nama = ""
-id = ""
+nama_terdeteksi = ""
+id_terdeteksi = ""
 kode_rfid = ""
 sekali_kirim = 0
 elapsed_time = 0
 remaining_time = 0
 start_encoding = 0
+
+pesan_status = ""
+
 
 # Mendapatkan folder saat ini
 current_directory = os.path.dirname(os.path.abspath(__file__))
@@ -99,32 +98,14 @@ status_nama = []
 konfirmasi_nama = []
 # Load YOLO model
 yolo_model = YOLO(config["model_yolo"])
-# Open the camera
-cam = cv2.VideoCapture(config["kamera"])
-timer_verifikasi = config["timer_verifikasi"]  
-
+timer_verifikasi = config["timer_verifikasi"]
 folder_wajah = config["folder_wajah"]
 toleransi = config["toleransi"] 
 timer = config["timer"] 
-ports = serial.tools.list_ports.comports()
-baud_rate = config["baudrate"]
 encoding_path = os.path.join(current_directory,config["encoding_path"]) 
+# Check data terbaru
 
 
-# Check if the camera is opened successfully
-
-if not cam.isOpened():
-    while (1):
-        print("Error: Could not open camera.")
-        print("Periksa nomor kamera / sambungan kamera ... ")
-        time.sleep(1)
-else:
-    print("Camera opened successfully.")
-    response = requests.get(url_absen)
-
-def proses_kirim_serial(pesan):
-    pesan = pesan +"\n"
-   
 
 
 def web_wajah(message):
@@ -177,12 +158,12 @@ def image_manager():
 
     # Proses setiap orang dan simpan ke folder dummy
     for orang in eval(respon.text):
-        id = orang["id"]
-        nama = orang["nama"]
+        id_terdeteksi = orang["id"]
+        nama_terdeteksi = orang["nama"]
         rfid =  orang["rfid"]
         
 
-        nama_folder_dummy = os.path.join(folder_dummy, id + "_" + nama + "_" +  rfid)
+        nama_folder_dummy = os.path.join(folder_dummy, id_terdeteksi + "_" + nama_terdeteksi + "_" +  rfid)
         os.makedirs(nama_folder_dummy, exist_ok=True)
 
         for i in range(10):
@@ -194,7 +175,7 @@ def image_manager():
                 gambar_respon = requests.get(url_gambar)
                 if gambar_respon.status_code == 200:
                     path_dummy = os.path.join(
-                        nama_folder_dummy, nama + "_" + str(i + 1) + ".jpg")
+                        nama_folder_dummy, nama_terdeteksi + "_" + str(i + 1) + ".jpg")
                     with open(path_dummy, "wb") as f:
                         f.write(gambar_respon.content)
                 else:
@@ -247,9 +228,9 @@ def encoding_wajah():
     global data_nama, data_semua, folder_wajah, yolo_model, encoding_path
     print("Mulai proses Encoding (perlu waktu tergantung jumlah foto)")
 
-    for nama in os.listdir(folder_wajah):
+    for nama_terdeteksi in os.listdir(folder_wajah):
         poto = []
-        sub_folder = os.path.join(folder_wajah, nama)
+        sub_folder = os.path.join(folder_wajah, nama_terdeteksi)
 
         if os.path.isdir(sub_folder):
             for b in tqdm(os.listdir(sub_folder)):
@@ -284,8 +265,8 @@ def encoding_wajah():
                                 poto.append(face_encodings[0])
 
         if poto:
-            data_semua[nama] = poto
-            print(f"{nama} selesai.")
+            data_semua[nama_terdeteksi] = poto
+            print(f"{nama_terdeteksi} selesai.")
         else:
             print("WAJAH TIDAK ADA PADA GAMBAR.")
             while True:
@@ -298,7 +279,7 @@ def encoding_wajah():
 
 def inisiasi():
     global data_semua, data_nama, folder_wajah,start_encoding
-    global timer_start, timer_deteksi, elapsed_time, sekali_kirim, last_detected_name, timer_verifikasi, nama, id, data_nama, last_rfid
+    global timer_start, timer_deteksi, elapsed_time, sekali_kirim, last_detected_name, timer_verifikasi, nama_terdeteksi, id_terdeteksi, data_nama, last_rfid
 
 
     # Inisialisasi variabel
@@ -308,7 +289,7 @@ def inisiasi():
     sekali_kirim = False
     last_detected_name = None
     last_rfid = None
-    print(" >>>>>  Jika ada perubahan pada folder nama / foto, wajib menghapus file encoding_wajah.bin <<<<<  ")
+    print(" >>>>>  Jika ada perubahan pada folder nama_terdeteksi / foto, wajib menghapus file encoding_wajah.bin <<<<<  ")
     time.sleep(3)
     image_manager()
 
@@ -322,7 +303,7 @@ def inisiasi():
         encoding_wajah()
 
     data_nama = list(data_semua.keys())
-    print("Data nama : ", data_nama)
+    print("Data nama_terdeteksi : ", data_nama)
 
     if data_nama != os.listdir(folder_wajah) or start_encoding == 1 :
         print("perubahan data terdeteksi, membuat encoding baru ... ")
@@ -336,7 +317,7 @@ def inisiasi():
             f.close()
 
         data_nama = list(data_semua.keys())
-        print("Data nama : ", data_nama)
+        print("Data nama_terdeteksi : ", data_nama)
         start_encoding = 0
 
     for l in (data_nama):
@@ -369,7 +350,7 @@ def draw_active_texts(frame):
 
 
 def deteksi(frame):
-            global kode_rfid,timer_start, timer_deteksi, elapsed_time, sekali_kirim, last_detected_name, timer_verifikasi, nama, id, data_nama, last_rfid
+            global pesan_status, kode_rfid,timer_start, timer_deteksi, elapsed_time, sekali_kirim, last_detected_name, timer_verifikasi, nama_terdeteksi, id_terdeteksi, last_rfid, data_nama
 
 
             ############################################# YOLO ######################################################
@@ -379,12 +360,19 @@ def deteksi(frame):
             # Loop setiap hasil deteksi
       
             nama_terdeteksi = "Tidak Dikenali"
-            nama = nama_terdeteksi
-            id = ""
-            cv2.putText(frame, kode_rfid, (50, 100),
+            id_terdeteksi = ""
+            if kode_rfid == "":
+                pesan_status = "Tidak Dikenal"
+            cv2.putText(frame, kode_rfid, (50, 400),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
+            
+           
+            
+            
             for r in results:
                 boxes = r.boxes.xyxy.tolist()
+                if len(boxes) == 0 :
+                    pesan_status = "Terhubung"
                 for box in boxes:
                         # Ekstraksi koordinat bounding box
                         x1, y1, x2, y2 = map(int, box[:4])
@@ -424,26 +412,27 @@ def deteksi(frame):
                                 konfirmasi_nama[data_nama.index(k)] / len(data_semua[k]) * 100)
                             print("Probabilitas : ", k,
                                 probabilitas, "%")
-                            # Tampilkan nama di frame
+                            # Tampilkan nama_terdeteksi di frame
                             cv2.putText(frame, k.split("_")[1] + " " +
                                         str(round(probabilitas, 1)) +
                                         "%", (0, 60 + koordinat*2),
                                         cv2.FONT_HERSHEY_SIMPLEX, 0.5, (255, 0, 255), 2)
-
+                            
+                            nama_orang = ""
                             if (konfirmasi_nama[np.argmax(konfirmasi_nama)] != 0):
-                                nama_terdeteksi = data_nama[np.argmax(
+                                nama_orang = data_nama[np.argmax(
                                     konfirmasi_nama)]
 
                             try:
-                                nama = nama_terdeteksi.split("_")[1]
-                                id = nama_terdeteksi.split("_")[0]
+                                nama_terdeteksi = nama_orang.split("_")[1]
+                                id_terdeteksi = nama_orang.split("_")[0]
                             except:
                                 pass
 
-                        # Tampilkan nama di frame
-                        cv2.putText(frame, nama, (x1, y1 - 80),
+                        # Tampilkan nama_terdeteksi di frame
+                        cv2.putText(frame, nama_terdeteksi, (x1, y1 - 80),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
-                        cv2.putText(frame, id, (x1, y1 - 25),
+                        cv2.putText(frame, id_terdeteksi, (x1, y1 - 25),
                                     cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 255), 2)
                         
                     
@@ -451,8 +440,6 @@ def deteksi(frame):
             # Logika Timer
             if nama_terdeteksi != "Tidak Dikenali":
                 # kode untuk kontrol esp32
-            
-
                 if nama_terdeteksi != last_detected_name:
                     # Nama baru terdeteksi, reset timer
                     timer_start = time.time()
@@ -466,30 +453,26 @@ def deteksi(frame):
 
                 if remaining_time <= 0 and not sekali_kirim:
                     print("....................... MENGIRIM ABSEN ........................")
-                    proses_kirim_serial("@"+nama) # untuk tampil nama di lcd
-                    proses_kirim_serial("#"+nama) # untuk buka pintu tanpa buzzer
+                    pesan_status = id_terdeteksi +","+ nama_terdeteksi +",0"# untuk tampil nama_terdeteksi di lcd
                     sekali_kirim = True
                     cv2.putText(frame, "MENGIRIM ABSEN ...", (0, 100),
                                 cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
-                    web_wajah(id)
+                    web_wajah(id_terdeteksi)
 
             else:
-                # Reset jika tidak ada nama yang terdeteksi
+                # Reset jika tidak ada nama_terdeteksi yang terdeteksi
                 timer_start = None
                 elapsed_time = 0
                 sekali_kirim = False
                 last_detected_name = None
-
+               
             # Tampilkan timer di frame
             if timer_start:
                 cv2.putText(frame, f"Status : ({round(remaining_time, 1)}s)", (0, 50),
                             cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
-
+                pesan_status = f"Tunggu : ({round(remaining_time, 1)}s)"
 ############################################# RFID ######################################################
 
-
-       
-        
             status = []
             if kode_rfid != "" :
                 for k in data_nama:
@@ -498,34 +481,30 @@ def deteksi(frame):
                     if data[2] == kode_rfid :
                         # kirim ke server
                         
-                        proses_kirim_serial("get_sensor")
-                        time.sleep(0.5)
-                        proses_kirim_serial("@"+data[1])
-                        time.sleep(0.5)
-                        proses_kirim_serial("!"+data[1]) # untuk buka pindu dan buzzer aktif
+
+                        pesan_status = data[2]+","+data[1]+",1" # buzzer
                         print("BENAR")
                         add_timed_text( "ID : " + data[2], (0, 300))
                         add_timed_text( "NAMA : " + data[1], (0, 330))
                         add_timed_text("MENGIRIM ABSEN ...", (0, 360))
                         web_rfid(data[2])
                         
-                        kode_rfid = ""
+                        
+                       
+
                         break
 
                 status.append(False)
         
                 if len(status) == len(data_nama) : 
-                    proses_kirim_serial("@Tidak Terdaftar")
+                    pesan_status = "ID Tidak Dikenali" # untuk tampil nama_terdeteksi di lcd
                     add_timed_text( "ID : " + kode_rfid, (0, 300))
                     add_timed_text("Tidak Terdaftar", (0, 330))
-                    kode_rfid = ""
+                   
             
             # Tampilkan frame
             frame = draw_active_texts(frame)
             return frame
-
-        
-
 
 
 
@@ -533,11 +512,6 @@ def deteksi(frame):
 app = Flask(__name__)
 current_frame = None
 lock = Lock()
-
-def kirim_id_nama(id,nama,rfid):
-    data = {'text': id +","+nama+","+rfid}
-    res = requests.post(f'http://{ip}:5000/id_nama', data=data)
-    print(res.text)
 
 
 @app.route('/upload_frame', methods=['POST'])
@@ -587,14 +561,23 @@ def rfid():
     else:
         return 'No text provided', 400
 
-#untuk kontrol relay
-@app.route('/id_nama', methods=['POST'])
-def rfid():
-    if 'text' in request.form:
-        print(f"[INFO] String diterima: {request.form['text']}")
-        return 'Relay updated'
-    else:
-        return 'failed relay updated', 400
+#untuk kasih nama dan id ke rasberry
+@app.route('/id_nama', methods=['GET'])
+def id_nama():
+    global id_terdeteksi,nama_terdeteksi
+    try :
+        return str([id_terdeteksi,nama_terdeteksi])
+    except:
+        return 'failed name updated', 400
+    
+#untuk kontrol semuanya
+@app.route('/status', methods=['GET'])
+def status():
+    global pesan_status
+    try :
+        return str(pesan_status)
+    except:
+        return 'failed status updated', 400
 
 def show_frame():
     global current_frame

@@ -5,6 +5,7 @@
     "model_yolo": "model_yolov8.pt",
     "toleransi": 0.5,
     "timer": 5,
-    "baudrate": 115200,
-    "encoding_path": "encoding_wajah.bin"
+    "baudrate": 9600,
+    "encoding_path": "encoding_wajah.bin",
+    "port_serial":"COM7"
 }
