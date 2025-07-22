@@ -1,0 +1,13 @@
+{
+    "kamera": 0,
+    "folder_wajah": "dataset_wajah",
+    "model_yolo": "model_yolov8.pt",
+    "encoding_path": "encoding_wajah.bin",
+    "faces_folder": "faces",
+    "path_data_th": "data.json",
+    "timer_verifikasi": 5,
+    "toleransi": 0.5,
+    "timer": 5,
+    "baudrate": 9600,
+    "threshold": 65
+}
