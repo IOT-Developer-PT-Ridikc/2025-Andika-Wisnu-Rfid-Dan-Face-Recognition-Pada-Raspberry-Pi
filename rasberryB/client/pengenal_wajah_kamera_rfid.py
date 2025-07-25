@@ -220,6 +220,5 @@ def utama():
 if __name__ == "__main__":
     proses_kirim_serial("inisiasi")
     proses_kirim_serial("Loading Kamera")
-    ret, frame = cap.read()
     utama()
     

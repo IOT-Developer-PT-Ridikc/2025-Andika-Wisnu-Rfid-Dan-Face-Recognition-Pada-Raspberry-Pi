@@ -484,7 +484,7 @@ def deteksi(frame):
                 print("....................... MENGIRIM ABSEN ........................")
                 pesan_status = id_terdeteksi + "," + nama_terdeteksi + ",0"  # untuk tampil nama_terdeteksi di lcd
                 sekali_kirim = True
-                cv2.putText(frame, "MENGIRIM ABSEN ...", (0, 100), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
+                cv2.putText(frame, "MENGIRIM ABSEN ...", (0, 300), cv2.FONT_HERSHEY_SIMPLEX, 1, (255, 255, 0), 2)
                 web_wajah(id_terdeteksi)
                 
 
