@@ -1,0 +1,5 @@
+{
+    "kamera": 0,
+    "port_serial": "/dev/ttyUSB0",
+    "baudrate": 9600
+}
